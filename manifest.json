@@ -7,12 +7,12 @@
   "icons": { "128": "icon128.png" },
   "permissions": ["downloads"],
   "background": {
-    "service_worker": "x.js"
+    "service_worker": "crest-take.js"
   },
   "content_scripts": [
     {
       "matches": ["https://x.com/*"],
-      "js": ["x.js"],
+      "js": ["crest-take.js"],
       "run_at": "document_idle"
     }
   ]

@@ -1,7 +1,7 @@
 /*
  * Integration test for the Crest Take extension.
  *
- * Runs BOTH execution contexts of x.js against the real GraphQL payload and
+ * Runs BOTH execution contexts of crest-take.js against the real GraphQL payload and
  * the real client bundle captured in x.com.har, sharing one emulated Chrome
  * platform (messaging + downloads) so the cross-context protocol is exercised
  * for real. There is no storage: completion travels back as the reply to the
@@ -233,7 +233,7 @@ function boot(withQuote, mode) {
   });
   Object.setPrototypeOf(swCtx, SWGlobalScope.prototype);
   swCtx.self = swCtx;
-  vm.runInContext(fs.readFileSync(path.join(EXT, 'x.js'), 'utf8'), swCtx, { filename: 'x.js' });
+  vm.runInContext(fs.readFileSync(path.join(EXT, 'crest-take.js'), 'utf8'), swCtx, { filename: 'crest-take.js' });
 
   /* ---- content script (no `performance`: resource timing must not be used) ---- */
   const doc = buildDom(withQuote);
@@ -246,7 +246,7 @@ function boot(withQuote, mode) {
   });
   csCtx.self = csCtx;
   csCtx.window = csCtx;
-  vm.runInContext(fs.readFileSync(path.join(EXT, 'x.js'), 'utf8'), csCtx, { filename: 'x.js' });
+  vm.runInContext(fs.readFileSync(path.join(EXT, 'crest-take.js'), 'utf8'), csCtx, { filename: 'crest-take.js' });
 
   return { plat, doc, fetched, mutate: () => observer && observer.cb() };
 }
@@ -298,7 +298,7 @@ async function scenario(name, outcome) {
     gqlFetches[0] && gqlFetches[0].opts.headers.authorization === 'Bearer ' + BEARER,
     gqlFetches[0] && gqlFetches[0].opts.headers.authorization);
   check('the bearer is not hardcoded in the source',
-    !fs.readFileSync(path.join(EXT, 'x.js'), 'utf8').includes(BEARER));
+    !fs.readFileSync(path.join(EXT, 'crest-take.js'), 'utf8').includes(BEARER));
   check('features and fieldToggles are sent empty',
     calls[0] && calls[0].includes('features=%7B%7D') && calls[0].includes('fieldToggles=%7B%7D'),
     calls[0]);
@@ -410,8 +410,8 @@ function manifestChecks() {
   check('the downloads permission is the only one', perms.length === 1 && perms[0] === 'downloads', perms.join(','));
   check('no storage permission', !perms.includes('storage'));
   check('no host permissions at all', !manifest.host_permissions, JSON.stringify(manifest.host_permissions));
-  check('the service worker is x.js', manifest.background.service_worker === 'x.js');
-  check('the content script is x.js', manifest.content_scripts[0].js.join() === 'x.js');
+  check('the service worker is crest-take.js', manifest.background.service_worker === 'crest-take.js');
+  check('the content script is crest-take.js', manifest.content_scripts[0].js.join() === 'crest-take.js');
   check('the content script matches x.com only',
     manifest.content_scripts[0].matches.join() === 'https://x.com/*',
     manifest.content_scripts[0].matches.join(','));
@@ -472,8 +472,13 @@ function manifestChecks() {
       else if (/\.(js|json|png)$/.test(e.name)) src.push(e.name);
     }
   })(EXT);
-  check('the extension ships exactly manifest.json, x.js and icon128.png',
-    src.sort().join() === 'icon128.png,manifest.json,x.js', src.join(','));
+  const expected = ['crest-take.js', 'icon128.png', 'manifest.json'];
+  check('the extension ships exactly manifest.json, crest-take.js and icon128.png',
+    src.length === expected.length && expected.every((f) => src.includes(f)), src.join(','));
+
+  // no shipped file may carry the platform's mark: the product is Crest Take
+  const marked = src.filter((f) => /(\bx\b|twitter|tweet)/i.test(f));
+  check('no shipped file name carries the platform mark', marked.length === 0, marked.join(','));
 
   // the old product name must be gone from every file
   const stale = [];

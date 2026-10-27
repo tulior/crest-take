@@ -22,7 +22,7 @@ The store takes a ZIP whose **manifest is at the root**, not inside a folder.
 
 ```
 manifest.json
-x.js
+crest-take.js
 icon128.png
 ```
 
@@ -31,7 +31,7 @@ Everything else in the repository (`test/`, `docs/`, `tools/`, `README.md`,
 ZIP with:
 
 ```powershell
-Compress-Archive -Path manifest.json,x.js,icon128.png -DestinationPath crest-take-1.0.0.zip
+Compress-Archive -Path manifest.json,crest-take.js,icon128.png -DestinationPath crest-take-1.0.0.zip
 ```
 
 The icon must be **128x128 PNG** in the package: *"You must provide a
