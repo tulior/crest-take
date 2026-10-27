@@ -113,7 +113,7 @@ the reply to the message that started the download.
 node test/test-xdl.js
 ```
 
-83 checks, no dependencies beyond Node itself. The harness runs **both** execution
+87 checks, no dependencies beyond Node itself. The harness runs **both** execution
 contexts of `x.js` — service worker and content script — against the real GraphQL
 payload and the real client bundle, sharing one emulated Chrome platform so the
 cross-context protocol is exercised for real. It covers the normal path, an
@@ -131,9 +131,14 @@ manifest.json     the extension (MV3) — the only two files Chrome needs
 x.js              the extension source: service worker + content script, one file
 test/test-xdl.js  the integration harness
 docs/             protocol analysis and the turn-1 reference resolver
+LICENSE           MIT
 ```
 
 ## A note on the platform
 
 This is an unofficial client. It only reads what your own logged-in session can already
 read, and it is not affiliated with, endorsed by, or sponsored by X Corp.
+
+## License
+
+MIT — see [LICENSE](LICENSE).

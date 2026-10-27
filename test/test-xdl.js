@@ -420,6 +420,18 @@ function manifestChecks() {
     !/(\bx\b|twitter|tweet)/i.test(manifest.name), manifest.name);
   check('short_name fits the 12-character limit', (manifest.short_name || '').length <= 12, manifest.short_name);
 
+  // the repo must carry its license, and the README must point at it
+  const licensePath = path.join(EXT, 'LICENSE');
+  const hasLicense = fs.existsSync(licensePath);
+  check('a LICENSE file ships with the repo', hasLicense);
+  if (hasLicense) {
+    const license = fs.readFileSync(licensePath, 'utf8');
+    check('the license is MIT', /MIT License/.test(license));
+    check('the license names the copyright holder', /Copyright \(c\) \d{4} .+/.test(license));
+  }
+  const readme = fs.readFileSync(path.join(EXT, 'README.md'), 'utf8');
+  check('the README states the license', /MIT/i.test(readme) && /LICENSE/.test(readme));
+
   // the extension must ship exactly its two source files, at any depth
   const src = [];
   (function walk(dir) {
