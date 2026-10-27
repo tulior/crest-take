@@ -1,5 +1,5 @@
 /*
- * X Video Downloader — Manifest V3.
+ * Crest Take — Manifest V3.
  *
  * One behaviour: put a download button on every video post, and save that
  * post's best MP4 when it is clicked. One file, two execution contexts — the

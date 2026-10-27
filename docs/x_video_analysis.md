@@ -50,8 +50,8 @@ it just isn't recorded in this file.
 **Key findings:**
 
 - **`video/1.1/show.json` and `statuses/show.json` are the dead APIs.** Both return a flat 404
-  for this tweet. These are the two most common "outdated API" paths in X video downloader
-  extensions. That is almost certainly your extension's 404.
+  for this tweet. These are the two most common "outdated API" paths in
+  video-downloader extensions for X. That is almost certainly your extension's 404.
 - **The GraphQL fallback needs the app-level Bearer token, not just the session cookie.**
   See the correction in §3a — the HAR cannot show you this header, and getting it wrong
   produces a 403 that looks like an auth problem.

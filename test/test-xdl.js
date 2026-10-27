@@ -1,5 +1,5 @@
 /*
- * Integration test for the X Video Downloader extension.
+ * Integration test for the Crest Take extension.
  *
  * Runs BOTH execution contexts of x.js against the real GraphQL payload and
  * the real client bundle captured in x.com.har, sharing one emulated Chrome
@@ -431,18 +431,65 @@ function manifestChecks() {
   }
   const readme = fs.readFileSync(path.join(EXT, 'README.md'), 'utf8');
   check('the README states the license', /MIT/i.test(readme) && /LICENSE/.test(readme));
+  check('the README links the privacy policy', /PRIVACY\.md/.test(readme));
 
-  // the extension must ship exactly its two source files, at any depth
+  // the store rejects an item with no icon, and the icon must be 128x128
+  const icons = manifest.icons || {};
+  check('the manifest declares a 128px icon', !!icons['128'], JSON.stringify(icons));
+  const iconPath = path.join(EXT, 'icon128.png');
+  check('the store icon is in the package', fs.existsSync(iconPath));
+  if (fs.existsSync(iconPath)) {
+    const png = fs.readFileSync(iconPath);
+    check('the store icon is a PNG', png.slice(0, 8).toString('hex') === '89504e470d0a1a0a');
+    check('the store icon is 128x128',
+      png.length > 24 && png.readUInt32BE(16) === 128 && png.readUInt32BE(20) === 128,
+      png.length > 24 ? `${png.readUInt32BE(16)}x${png.readUInt32BE(20)}` : 'short');
+  }
+
+  // handling website content and a csrf cookie means a privacy policy is due
+  const privacyPath = path.join(EXT, 'PRIVACY.md');
+  check('a privacy policy ships with the repo', fs.existsSync(privacyPath));
+  if (fs.existsSync(privacyPath)) {
+    const pp = fs.readFileSync(privacyPath, 'utf8');
+    const flat = pp.replace(/\s+/g, ' ');
+    check('the privacy policy carries the Limited Use statement',
+      /adhere to the Chrome Web Store User Data Policy, including the Limited Use requirements/.test(flat));
+    check('the privacy policy names every host the extension talks to',
+      /x\.com/.test(pp) && /abs\.twimg\.com/.test(pp) && /video\.twimg\.com/.test(pp));
+    check('the privacy policy states that nothing is persisted',
+      /nothing is persisted|not persisted/i.test(pp));
+    check('the privacy policy states that no remote code is executed',
+      /no code from it\s+is\s+executed/i.test(pp));
+  }
+
+  // the extension must ship exactly its three package files, at any depth
   const src = [];
   (function walk(dir) {
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-      if (e.name === '.git' || e.name === 'test' || e.name === 'docs') continue;
+      if (e.name === '.git' || e.name === 'test' || e.name === 'docs' || e.name === 'tools') continue;
       const p = path.join(dir, e.name);
       if (e.isDirectory()) walk(p);
-      else if (/\.(js|json)$/.test(e.name)) src.push(e.name);
+      else if (/\.(js|json|png)$/.test(e.name)) src.push(e.name);
     }
   })(EXT);
-  check('the extension ships exactly manifest.json and x.js', src.sort().join() === 'manifest.json,x.js', src.join(','));
+  check('the extension ships exactly manifest.json, x.js and icon128.png',
+    src.sort().join() === 'icon128.png,manifest.json,x.js', src.join(','));
+
+  // the old product name must be gone from every file
+  const stale = [];
+  const oldName = new RegExp(['X', 'Video', 'Downloader'].join(' '), 'i');
+  (function walk(dir) {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (e.name === '.git') continue;
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (/\.(js|json|md)$/.test(e.name) &&
+        oldName.test(fs.readFileSync(p, 'utf8'))) {
+        stale.push(path.relative(EXT, p));
+      }
+    }
+  })(EXT);
+  check('no file still carries the old product name', stale.length === 0, stale.join(','));
 }
 
 /* ---------------- run ---------------- */

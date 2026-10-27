@@ -4,6 +4,7 @@
   "short_name": "Crest Take",
   "version": "1.0.0",
   "description": "Save the highest-bitrate MP4 from a video post with one click. Runs on x.com, keeps nothing, uploads nothing.",
+  "icons": { "128": "icon128.png" },
   "permissions": ["downloads"],
   "background": {
     "service_worker": "x.js"
