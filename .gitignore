@@ -1,0 +1,12 @@
+# Sample media and archives are build output, not source.
+*.mp4
+*.zip
+*.m3u8
+
+# Editor / OS noise
+.DS_Store
+Thumbs.db
+*.swp
+
+# The harness needs no dependencies, but keep node_modules out if that changes.
+node_modules/
