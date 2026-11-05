@@ -1,19 +1,33 @@
 {
   "manifest_version": 3,
   "name": "Crest Take",
-  "short_name": "Crest Take",
-  "version": "1.0.0",
-  "description": "Save the highest-bitrate MP4 from a video post with one click. Runs on x.com, keeps nothing, uploads nothing.",
-  "icons": { "128": "icon128.png" },
-  "permissions": ["downloads"],
+  "version": "2.0.0",
+  "description": "Download the best progressive MP4 attached to an X post.",
+  "minimum_chrome_version": "120",
+  "permissions": [
+    "downloads",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://x.com/*"
+  ],
   "background": {
-    "service_worker": "crest-take.js"
+    "service_worker": "service_worker.js"
   },
   "content_scripts": [
     {
-      "matches": ["https://x.com/*"],
-      "js": ["crest-take.js"],
+      "matches": [
+        "https://x.com/*"
+      ],
+      "js": [
+        "core.js",
+        "content.js"
+      ],
       "run_at": "document_idle"
     }
-  ]
+  ],
+  "short_name": "Crest Take",
+  "icons": {
+    "128": "icon128.png"
+  }
 }
