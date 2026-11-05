@@ -51,58 +51,104 @@
     opPromise = null;
   }
 
-  async function discoverOperation() {
-    const urls = [
-      ...new Set(
-        [...document.querySelectorAll('script[src]')]
-          .map((script) => script.src)
-          .filter(Boolean),
-      ),
-    ];
+  // Stable linear partition: inspect main bundles first, other assets in DOM order.
+  // Fresh-document URLs are resolved against x.com rather than this tab's path.
+  function orderedBundleUrls(scripts, baseUrl) {
+    const seen = new Set();
+    const main = [];
+    const other = [];
+    for (const script of scripts) {
+      const raw = typeof script === 'string'
+        ? script
+        : script.getAttribute('src') || script.src;
+      let parsed;
+      try {
+        parsed = new URL(raw, baseUrl);
+      } catch {
+        continue;
+      }
+      if (parsed.protocol !== 'https:' ||
+          (parsed.hostname !== 'abs.twimg.com' && parsed.hostname !== 'x.com') ||
+          !parsed.pathname.endsWith('.js')) continue;
+      const url = parsed.href;
+      if (seen.has(url)) continue;
+      seen.add(url);
+      (parsed.pathname.includes('/main.') ? main : other).push(url);
+    }
+    return main.concat(other);
+  }
 
-    urls.sort((a, b) => {
-      const aMain = a.includes('/main.') ? 0 : 1;
-      const bMain = b.includes('/main.') ? 0 : 1;
-      if (aMain !== bMain) return aMain - bMain;
-      return a < b ? -1 : a > b ? 1 : 0;
-    });
+  async function currentDocumentBundleUrls() {
+    try {
+      const response = await fetch('https://x.com/', {
+        credentials: 'include',
+        cache: 'reload',
+      });
+      if (!response.ok) return [];
+      const html = await response.text();
+      // HTML is parsed only as data. Its scripts are neither loaded nor executed.
+      const parsed = new DOMParser().parseFromString(html, 'text/html');
+      return orderedBundleUrls(parsed.querySelectorAll('script[src]'), 'https://x.com/');
+    } catch {
+      return [];
+    }
+  }
 
-    let queryId = '';
-    let bearerToken = '';
-
+  async function scanBundles(urls, seen, found, staleQid, cacheMode) {
     for (const url of urls) {
+      if (found.qid && found.token) break;
+      if (seen.has(url)) continue;
+      seen.add(url);
       let text = '';
       try {
         const response = await fetch(url, {
-          credentials: 'omit',
-          cache: 'force-cache',
+          credentials: new URL(url).hostname === 'x.com' ? 'include' : 'omit',
+          cache: cacheMode,
         });
         if (!response.ok) continue;
         text = await response.text();
       } catch {
         continue;
       }
-
-      if (!queryId) queryId = findQueryId(text);
-      if (!bearerToken) bearerToken = findBearerToken(text);
-
-      if (queryId && bearerToken) break;
+      if (!found.qid) {
+        const candidate = findQueryId(text);
+        if (candidate && candidate !== staleQid) found.qid = candidate;
+      }
+      if (!found.token) found.token = findBearerToken(text);
     }
-
-    if (!queryId || !bearerToken) {
-      throw new XdlError('operation-unavailable');
-    }
-
-    return { qid: queryId, token: bearerToken };
   }
 
-  function findOperation() {
-    if (opCache) return Promise.resolve(opCache);
+  async function discoverOperation(fresh = false, staleQid = '') {
+    const loaded = orderedBundleUrls(
+      document.querySelectorAll('script[src]'), document.baseURI,
+    );
+    const seen = new Set();
+    const found = { qid: '', token: '' };
+
+    if (fresh) {
+      // A rotated operation may live in a newly deployed bundle that is not
+      // referenced by the still-open tab. Inspect the current page's list first.
+      const current = await currentDocumentBundleUrls();
+      await scanBundles(current, seen, found, staleQid, 'reload');
+      if (!found.qid || !found.token) {
+        await scanBundles(loaded, seen, found, staleQid, 'reload');
+      }
+    } else {
+      await scanBundles(loaded, seen, found, '', 'force-cache');
+    }
+
+    if (!found.qid || !found.token) {
+      throw new XdlError('operation-unavailable');
+    }
+    return found;
+  }
+
+  function findOperation(fresh = false, staleQid = '') {
+    if (!fresh && opCache) return Promise.resolve(opCache);
     if (opPromise) return opPromise;
 
     const generation = opGeneration;
-
-    const promise = discoverOperation()
+    const promise = discoverOperation(fresh, staleQid)
       .then((operation) => {
         if (generation === opGeneration) opCache = operation;
         return operation;
@@ -128,7 +174,7 @@
 
       let operation;
       try {
-        operation = await findOperation();
+        operation = await findOperation(attempt > 0, [...attemptedQueryIds][0] || '');
       } catch {
         throw new XdlError('operation-unavailable');
       }
@@ -411,7 +457,9 @@
 
       if (!pendingByRequest.has(entry.requestId)) return;
 
-      const delay = entry.accepted ? 2000 : 500;
+      // Durable terminal-change notifications are primary. Poll infrequently
+      // after acceptance so missed events still reconcile authoritatively.
+      const delay = entry.accepted ? 12_000 : 500;
       entry.timer = setTimeout(tick, delay);
     };
 

@@ -12,13 +12,13 @@ No build step, video reconstruction, bulk mode, telemetry, developer-operated ba
 2. Select **Load unpacked** and choose the repository root.
 3. Reload already-open X tabs. Use the download control on a video post.
 
-Downloads are saved under `Downloads/x-videos/`, with filenames derived from the author and post text.
+Downloads are saved under `Downloads/x-videos/`, with filenames derived from the author, **post ID**, and post text (for example, `alice_123456789_video.mp4`).
 
 ## Runtime design
 
 `shared.js` contains post/video selectors, operation metadata matching, MP4 selection, and filename safety rules.
 
-`content.js` handles post-scoped control reconciliation, authenticated media resolution, per-control state, and download-status notification. It uses a request-ID-indexed pending map, direct worker notifications, and polling as a fallback.
+`content.js` handles post-scoped control reconciliation, authenticated media resolution, per-control state, and download-status notification. A fresh-document bundle lookup is attempted after a stale GraphQL operation ID, with a bounded retry. It uses a request-ID-indexed pending map and slower polling as a fallback to durable-state-change notifications.
 
 `sw.js` is a module service worker that uses individually keyed records in `chrome.storage.local`:
 
@@ -29,7 +29,7 @@ Downloads are saved under `Downloads/x-videos/`, with filenames derived from the
 
 Downloads for unrelated request IDs can start concurrently; each request ID has a serialized critical section. A `STARTING` reservation is durably written **before** invoking Chrome's download API. After worker suspension/restart, an unconfirmed start is reconciled against uniquely matching, extension-created Chrome downloads using URL fingerprint and start-time checks. Ambiguous matches are rejected rather than initiating another transfer.
 
-The worker writes both direct and reverse records upon confirmation, handles terminal `onChanged` events, and also verifies completion using `chrome.downloads.search`. It notifies the originating tab while allowing polling if the tab missed the notification. Terminal acknowledgments remove both record keys. Unacknowledged terminal records are pruned after 30 days; orphan reverse entries are also removed. Full scans are reserved for startup/periodic cleanup and exceptional recovery, not ordinary lookups.
+The worker writes both direct and reverse records upon confirmation, handles terminal `onChanged` events, and also verifies completion using `chrome.downloads.search`. A `chrome.storage.onChanged` listener in the worker forwards persisted terminal transitions to the originating tab, while status polling remains available if a message is missed. Storage is not exposed to content scripts. Terminal acknowledgments remove both record keys. Unacknowledged terminal records are pruned after 30 days; orphan reverse entries are also removed. Full scans are reserved for startup/periodic cleanup and exceptional recovery, not ordinary lookups.
 
 No credentials, post text, raw video URLs, or filenames are stored by the extension. A startup/cleanup scan may touch local recovery records. No server-side sync is used.
 
@@ -44,7 +44,7 @@ See [PRIVACY.md](PRIVACY.md) for a fuller description of data use.
 
 ## Tests
 
-Run `npm test` (Node.js 22 or later recommended). The tests cover pure helpers and a mocked MV3 worker lifecycle, including concurrent starts, interrupted-download recovery, callback-gap restart, ambiguous candidate rejection, authoritative completion, acknowledgments, and expiry. These are not a substitute for live Chrome/X integration testing.
+Run `npm test` (Node.js 22 or later recommended). The tests cover pure helpers, post-ID filename uniqueness, stale operation-ID rediscovery, and a mocked MV3 worker lifecycle, including concurrent starts, interrupted-download recovery, callback-gap restart, ambiguous candidate rejection, durable terminal-state notification, acknowledgments, and expiry. These are not a substitute for live Chrome/X integration testing.
 
 ## Files
 

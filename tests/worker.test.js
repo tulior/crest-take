@@ -10,7 +10,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const shared = fs.readFileSync(path.join(root, 'shared.js'), 'utf8');
 const worker = fs.readFileSync(path.join(root, 'sw.js'), 'utf8').replace(/^import '\.\/shared\.js';\s*/m, '');
 const videoUrl = 'https://video.twimg.com/ext_tw_video/a/pu/vid/1280x720/video.mp4';
-const filename = 'x-videos/user_video.mp4';
+const filename = 'x-videos/user_123456789_video.mp4';
 const id = '12345678-1234-4123-8123-123456789abc';
 const sender = { id: 'crest-test', tab: { id: 23 }, frameId: 0 };
 const delay = () => new Promise((resolve) => setImmediate(resolve));
@@ -41,6 +41,7 @@ class MockPlatform {
   makeWorker() {
     let onMessage;
     let onChanged;
+    let onStorageChanged;
     let onStartup;
     const platform = this;
     const chrome = {
@@ -52,10 +53,21 @@ class MockPlatform {
       storage: {
         local: {
           get: (key) => platform.get(key),
-          set: (items) => platform.set(items),
+          set: async (items) => {
+            const changes = {};
+            for (const [key, value] of Object.entries(items)) {
+              changes[key] = {
+                oldValue: platform.records.has(key) ? structuredClone(platform.records.get(key)) : undefined,
+                newValue: structuredClone(value),
+              };
+            }
+            await platform.set(items);
+            queueMicrotask(() => onStorageChanged?.(changes, 'local'));
+          },
           remove: (keys) => platform.remove(keys),
           async setAccessLevel() {},
         },
+        onChanged: { addListener(fn) { onStorageChanged = fn; } },
       },
       downloads: {
         download({ url, filename: name, conflictAction }, callback) {
@@ -96,6 +108,7 @@ class MockPlatform {
         onChanged({ id: downloadId, state: { current: state } });
       },
       startup: () => onStartup?.(),
+      emitStorageChange: (changes, area = 'local') => onStorageChanged?.(changes, area),
     };
   }
 }
@@ -203,6 +216,7 @@ test('event-driven terminal notification, status and acknowledgement delete both
   worker.change(1, 'complete');
   await waitUntil(() => platform.records.get('xdl:req:' + id)?.state === 'SUCCEEDED');
   assert.equal((await worker.message(statusMessage())).state, 'SUCCEEDED');
+  await waitUntil(() => platform.messages.some((msg) => msg.state === 'SUCCEEDED'));
   assert.equal(platform.messages.at(-1)?.state, 'SUCCEEDED');
   assert.equal((await worker.message(ackMessage())).ok, true);
   assert.equal(platform.records.has('xdl:req:' + id), false);
@@ -250,4 +264,28 @@ test('a reused request ID with a different URL or filename is rejected', async (
   assert.equal((await worker.message(startMessage(id, videoUrl + '?other'))).reason, 'request-id-reused');
   assert.equal((await worker.message(startMessage(id, videoUrl, 'x-videos/else.mp4'))).reason, 'request-id-reused');
   assert.equal(platform.downloadCalls, 1);
+});
+
+test('only durable terminal request changes trigger tab notifications', async () => {
+  const platform = new MockPlatform();
+  const worker = platform.makeWorker();
+  await worker.message(startMessage());
+  const before = platform.messages.length;
+  const prior = platform.records.get('xdl:req:' + id);
+  const completed = { ...prior, state: 'SUCCEEDED', finishedAt: Date.now(), reason: '' };
+  platform.records.set('xdl:req:' + id, completed);
+  worker.emitStorageChange({
+    ['xdl:req:' + id]: { oldValue: prior, newValue: completed },
+  });
+  await waitUntil(() => platform.messages.length === before + 1);
+  assert.equal(platform.messages.at(-1).requestId, id);
+  assert.equal(platform.messages.at(-1).state, 'SUCCEEDED');
+  worker.emitStorageChange({
+    ['xdl:req:' + id]: { oldValue: completed, newValue: { ...completed, reason: 'duplicate' } },
+  });
+  worker.emitStorageChange({
+    ['xdl:req:' + id]: { oldValue: prior, newValue: completed },
+  }, 'sync');
+  await delay();
+  assert.equal(platform.messages.length, before + 1);
 });

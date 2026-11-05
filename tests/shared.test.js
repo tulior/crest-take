@@ -177,11 +177,13 @@ test('reverse minified operation order is also accepted', () => {
 test('filename is deterministic, safe, and confined to x-videos/', () => {
   const filename = makeFilename({
     handle: 'a/b',
+    id: '1234567890123456789',
     text: 'hello ../ world? <x> @a https://t.co/example',
   });
 
   assert.ok(filename.startsWith('x-videos/'));
   assert.ok(filename.endsWith('.mp4'));
+  assert.ok(filename.includes('_1234567890123456789_'));
   assert.ok(isSafeDownloadFilename(filename));
 
   const rest = filename.slice('x-videos/'.length);
@@ -193,6 +195,7 @@ test('filename is deterministic, safe, and confined to x-videos/', () => {
 test('filename sanitization resists traversal and reserved names', () => {
   const filename = makeFilename({
     handle: '../CON',
+    id: '987654321',
     text: '..',
   });
 
@@ -202,4 +205,14 @@ test('filename sanitization resists traversal and reserved names', () => {
   assert.equal(isSafeDownloadFilename('x-videos/../evil.mp4'), false);
   assert.equal(isSafeDownloadFilename('x-videos/evil.exe'), false);
   assert.equal(isSafeDownloadFilename('other/evil.mp4'), false);
+});
+
+test('filename carries the originating post ID and avoids equal-text collisions', () => {
+  const first = makeFilename({ handle: 'alice', id: '123', text: 'same text' });
+  const second = makeFilename({ handle: 'alice', id: '456', text: 'same text' });
+  assert.equal(first, 'x-videos/alice_123_same text.mp4');
+  assert.equal(second, 'x-videos/alice_456_same text.mp4');
+  assert.notEqual(first, second);
+  assert.ok(isSafeDownloadFilename(first));
+  assert.throws(() => makeFilename({ handle: 'alice', text: 'no ID' }), TypeError);
 });

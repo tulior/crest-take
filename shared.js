@@ -135,9 +135,13 @@
   }
 
   function makeFilename(post) {
+    const postId = post?.id;
+    if (typeof postId !== 'string' || !/^\d{1,25}$/.test(postId)) {
+      throw new TypeError('invalid-post-id');
+    }
     const handle = sanitizePart(post?.handle, 'unknown', 30);
     const text = sanitizePart(post?.text, 'video', 80);
-    return `x-videos/${handle}_${text}.mp4`;
+    return `x-videos/${handle}_${postId}_${text}.mp4`;
   }
 
   function isSafeDownloadFilename(name) {

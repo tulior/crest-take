@@ -125,8 +125,9 @@ async function finishLocked(record, state, reason = '') {
   };
   delete next.url;
   delete next.filename;
+  // The storage change event is the primary terminal notification channel.
+  // Polling remains an independent recovery path if tab messaging is missed.
   await storage.set({ [requestKey(record.requestId)]: next });
-  void notifyTab(next, state, reason);
   return next;
 }
 
@@ -392,6 +393,21 @@ async function pruneRecords(force = false) {
   })().finally(() => { prunePromise = null; });
   return prunePromise;
 }
+
+// Subscribe to durable terminal-state changes rather than sending directly
+// from the code path that settles a download. Storage remains worker-only:
+// the content script receives a scoped message and retains status polling.
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== 'local') return;
+  for (const [key, change] of Object.entries(changes)) {
+    if (!key.startsWith(REQUEST_PREFIX)) continue;
+    const previous = change?.oldValue;
+    const current = change?.newValue;
+    if (!current || !terminal(current.state) || terminal(previous?.state)) continue;
+    if (!validRequestId(current.requestId) || requestKey(current.requestId) !== key) continue;
+    void notifyTab(current, current.state, current.reason || '');
+  }
+});
 
 chrome.downloads.onChanged.addListener((delta) => {
   if (!Number.isInteger(delta?.id)) return;

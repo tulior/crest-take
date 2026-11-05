@@ -18,14 +18,14 @@ The existing 128×128 `icon128.png` is retained. Do not package tests, package m
 
 ## Single purpose
 
-Add a button to eligible video posts at `x.com`. Save the post's highest-bitrate progressive MP4 using the user's existing logged-in X session and Chrome's own downloads manager. No conversion, bulk download, telemetry, accounts, or developer server.
+Add a button to eligible video posts at `x.com`. Save the post's highest-bitrate progressive MP4 using the user's existing logged-in X session and Chrome's own downloads manager. Filenames include the author's handle, post ID, and sanitized post text. No conversion, bulk download, telemetry, accounts, or developer server.
 
 ## Permission justifications
 
 - **downloads:** initiate a selected download, observe terminal Chrome download events, and query download status after worker restart.
 - **storage:** persist minimal local request/download correlation and URL/filename fingerprints to prevent duplicates, recover an interrupted callback window, and clean up acknowledged/expired jobs.
 - **x.com host:** run the content script on video posts and call the authenticated metadata operation.
-- **abs.twimg.com host:** inspect the current X client assets as plain text for an operation identifier and public app bearer. Remote JavaScript is **not evaluated**.
+- **abs.twimg.com host:** inspect the current X client assets as plain text for an operation identifier and public app bearer. Upon stale query-ID detection the extension may also fetch the current `x.com` HTML document to discover newly deployed script URLs. Remote JavaScript and HTML scripts are **not evaluated**.
 
 The privacy disclosure must reflect local persistence of minimal download metadata. The extension intentionally does **not** claim zero storage or no host permissions.
 
@@ -38,7 +38,7 @@ See [../PRIVACY.md](../PRIVACY.md). The extension transiently handles the clicke
 1. Load the extension unpacked and reload an X page.
 2. Check one button for each independently eligible video post, including nested quoted posts.
 3. Download an MP4; check `Downloads/x-videos/` and the eventual success state.
-4. Interrupt a download and verify failure without false success.
+4. Interrupt a download and verify failure without false success; check durable storage-change notification and fallback status polling.
 5. Restart the service worker during a transfer and in the Chrome download acceptance window; verify recovery or conservative failure.
 6. Verify acknowledged download keys are removed and review browser storage and host permissions.
 7. Re-run `npm test`; the mocked tests do not provide live Chrome/X validation.
