@@ -1,48 +1,46 @@
-# Chrome Web Store submission notes — Crest Take v2
+# Chrome Web Store submission notes — Crest Take v3
 
-This file describes the **current v2 extension**. Verify current Chrome Web Store policies and dashboard wording before submission; older store claims and review estimates are not authoritative.
+This file describes the current module-based extension. Check the latest Chrome Web Store requirements and developer dashboard fields before publishing.
 
-## Package
+## Distribution package
 
-ZIP these files with `manifest.json` at the archive root:
+Archive the following files at the ZIP root:
 
 ```text
 manifest.json
-core.js
+shared.js
 content.js
-service_worker.js
+sw.js
 icon128.png
 ```
 
-No development tests, documentation, or Node package files are required in the extension ZIP. The 128×128 icon is in `icon128.png`.
+The existing 128×128 `icon128.png` is retained. Do not package tests, package metadata, or protocol notes.
 
-## Listing summary
+## Single purpose
 
-Crest Take adds a download control to video posts on x.com and saves the highest-bitrate progressive MP4 selected by the user.
+Add a button to eligible video posts at `x.com`. Save the post's highest-bitrate progressive MP4 using the user's existing logged-in X session and Chrome's own downloads manager. No conversion, bulk download, telemetry, accounts, or developer server.
 
-The button reports resolving, transferring, success, or failure. It does not offer HLS reconstruction, batch operations, accounts, telemetry, or a developer-operated server.
+## Permission justifications
 
-## Permissions justification
+- **downloads:** initiate a selected download, observe terminal Chrome download events, and query download status after worker restart.
+- **storage:** persist minimal local request/download correlation and URL/filename fingerprints to prevent duplicates, recover an interrupted callback window, and clean up acknowledged/expired jobs.
+- **x.com host:** run the content script on video posts and call the authenticated metadata operation.
+- **abs.twimg.com host:** inspect the current X client assets as plain text for an operation identifier and public app bearer. Remote JavaScript is **not evaluated**.
 
-- **downloads:** start a user-initiated download, observe Chrome's download state, and check completion or interruption.
-- **storage:** retain minimal request/download identifiers, phase, timestamps, and a URL fingerprint for MV3 worker-restart recovery. Per-request records are removed after acknowledgement and stale terminal records are eventually pruned.
-- **host access (`https://x.com/*`):** place controls on X posts and resolve the selected post with the user's existing authenticated session.
+The privacy disclosure must reflect local persistence of minimal download metadata. The extension intentionally does **not** claim zero storage or no host permissions.
 
-The content script discovers the GraphQL query ID and public application bearer by reading the web client's script assets **as text**. It does not evaluate remote code.
+## Data declarations
 
-## Data disclosure
+See [../PRIVACY.md](../PRIVACY.md). The extension transiently handles the clicked post's text and the existing X authentication context. It retains only opaque correlation IDs, download IDs, state, timestamps, owning tab/frame IDs, and SHA-256 fingerprints in local extension storage. It does not retain raw media URLs, cookies, bearer tokens, or post text.
 
-See [../PRIVACY.md](../PRIVACY.md). The extension processes post text and the user's X authentication context transiently, and stores only minimal download recovery metadata in Chrome local extension storage. No raw media URL or authentication data is stored; there is no developer server or analytics.
+## Manual verification before store submission
 
-## Manual verification
+1. Load the extension unpacked and reload an X page.
+2. Check one button for each independently eligible video post, including nested quoted posts.
+3. Download an MP4; check `Downloads/x-videos/` and the eventual success state.
+4. Interrupt a download and verify failure without false success.
+5. Restart the service worker during a transfer and in the Chrome download acceptance window; verify recovery or conservative failure.
+6. Verify acknowledged download keys are removed and review browser storage and host permissions.
+7. Re-run `npm test`; the mocked tests do not provide live Chrome/X validation.
 
-1. Load the unpacked extension into a supported Chrome build.
-2. Sign in to x.com, open an ordinary video post and a quoted video post, and verify separate controls resolve their own posts.
-3. Verify the saved file under `Downloads/x-videos/` and the button's completed state.
-4. Verify interrupted downloads become failures and retries are usable.
-5. Suspend/restart the MV3 worker during a transfer and verify status recovery.
-6. Review the manifest permissions and privacy statement together before submitting.
-
-## Source documentation
-
-`docs/x_video_analysis.md` and `docs/x_video_resolver.js` are historical protocol analysis, not shipped extension runtime code.
+`docs/x_video_analysis.md` and `docs/x_video_resolver.js` remain historical protocol references, not distributed runtime.

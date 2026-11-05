@@ -1,44 +1,58 @@
 # Crest Take
 
-A Manifest V3 Chrome extension that adds a download control to video posts on **x.com**. One click resolves the selected post through X's `TweetResultByRestId` GraphQL operation, selects the globally highest-bitrate progressive MP4, and hands the URL to Chrome's download manager.
+A Chrome Manifest V3 extension for downloading the highest-bitrate progressive MP4 attached to an X post.
 
-No HLS reconstruction, bulk downloading, analytics, remote code execution, or developer-operated server.
+A download control appears on eligible posts at `x.com`. On activation, the content script discovers X's current `TweetResultByRestId` GraphQL operation and application bearer from client script assets, resolves the selected post through the user's own authenticated X session, and selects the best progressive MP4 with a linear scan. Chrome's download manager performs the transfer.
+
+No build step, video reconstruction, bulk mode, telemetry, developer-operated backend, or remotely executed code.
 
 ## Install
 
-1. Open `chrome://extensions` and enable Developer mode.
-2. Choose **Load unpacked** and select this repository's root directory.
-3. Reload any existing x.com tabs, then use the ⬇ button on a video post.
+1. Open `chrome://extensions` in Chrome and enable **Developer mode**.
+2. Select **Load unpacked** and choose the repository root.
+3. Reload already-open X tabs. Use the download control on a video post.
 
-Files are saved to `Downloads/x-videos/` as `handle_post text.mp4`.
+Downloads are saved under `Downloads/x-videos/`, with filenames derived from the author and post text.
 
-## Implementation
+## Runtime design
 
-- **content.js** reconciles controls within each post (including quoted posts), discovers the current GraphQL query ID and public app bearer from the page's script assets, makes an authenticated request to x.com, and selects the best progressive MP4 through **core.js**. Discovery occurs on demand; credentials are kept only in content-script memory.
-- **service_worker.js** validates start messages, creates a durable request-ID reservation before calling Chrome's download API, correlates download events, and reports authoritative complete/interrupted status. It can recover in-progress jobs after a worker restart and is idempotent for a repeated request ID.
-- The worker persists individual records under `crestTakeJobV2:` and `crestTakeOrphanV2:` in `chrome.storage.local`, rather than rewriting an entire ledger on each status check. An in-memory reverse map indexes downloads by ID. Terminal jobs are removed when acknowledged; unacknowledged terminal records expire after 30 days. Records contain opaque request IDs, download IDs, status, timestamps, and a one-way media-URL fingerprint — **not** cookies, bearer tokens, raw media URLs, filenames, or post text.
+`shared.js` contains post/video selectors, operation metadata matching, MP4 selection, and filename safety rules.
+
+`content.js` handles post-scoped control reconciliation, authenticated media resolution, per-control state, and download-status notification. It uses a request-ID-indexed pending map, direct worker notifications, and polling as a fallback.
+
+`sw.js` is a module service worker that uses individually keyed records in `chrome.storage.local`:
+
+| Key | Value |
+| --- | --- |
+| `xdl:req:<requestId>` | Download phase, Chrome download ID, owning tab/frame, creation/start times, SHA-256 URL and filename fingerprints |
+| `xdl:dl:<downloadId>` | Reverse mapping to a request ID |
+
+Downloads for unrelated request IDs can start concurrently; each request ID has a serialized critical section. A `STARTING` reservation is durably written **before** invoking Chrome's download API. After worker suspension/restart, an unconfirmed start is reconciled against uniquely matching, extension-created Chrome downloads using URL fingerprint and start-time checks. Ambiguous matches are rejected rather than initiating another transfer.
+
+The worker writes both direct and reverse records upon confirmation, handles terminal `onChanged` events, and also verifies completion using `chrome.downloads.search`. It notifies the originating tab while allowing polling if the tab missed the notification. Terminal acknowledgments remove both record keys. Unacknowledged terminal records are pruned after 30 days; orphan reverse entries are also removed. Full scans are reserved for startup/periodic cleanup and exceptional recovery, not ordinary lookups.
+
+No credentials, post text, raw video URLs, or filenames are stored by the extension. A startup/cleanup scan may touch local recovery records. No server-side sync is used.
 
 ## Permissions
 
-| Permission | Purpose |
-| --- | --- |
-| `downloads` | Start downloads and observe Chrome's completion/interruption state. |
-| `storage` | Persist minimal download-correlation records across MV3 worker suspension. |
-| Host access: `https://x.com/*` | Run on x.com and resolve a clicked post via its authenticated X request. |
+- `downloads`: initiate and observe downloads, recover Chrome download status.
+- `storage`: preserve minimal download correlation and recovery state across service-worker/browser restarts.
+- Host access to `x.com`: inject controls and resolve clicked post media.
+- Host access to `abs.twimg.com`: access X's public client assets for operation discovery.
 
-The page's current script assets may be read as text for metadata discovery. No remotely obtained script is evaluated.
+See [PRIVACY.md](PRIVACY.md) for a fuller description of data use.
 
 ## Tests
 
-Run `npm test` or `node --test tests/*.test.mjs`. These tests cover pure selection/filename/state logic and a mocked service-worker lifecycle. They are not a live Chrome/X integration test.
+Run `npm test` (Node.js 22 or later recommended). The tests cover pure helpers and a mocked MV3 worker lifecycle, including concurrent starts, interrupted-download recovery, callback-gap restart, ambiguous candidate rejection, authoritative completion, acknowledgments, and expiry. These are not a substitute for live Chrome/X integration testing.
 
-## Source layout
+## Files
 
 ```text
 manifest.json
-core.js
+shared.js
 content.js
-service_worker.js
+sw.js
 icon128.png
 package.json
 tests/
@@ -47,8 +61,6 @@ PRIVACY.md
 LICENSE
 ```
 
-## Privacy and scope
+The existing `docs/x_video_analysis.md` and `docs/x_video_resolver.js` are historical protocol references.
 
-[PRIVACY.md](PRIVACY.md) describes the locally stored recovery metadata and data flows. The extension does not upload anything to its developer. It operates on video available to the user's existing X session; it is not affiliated with X Corp.
-
-MIT licensed; see [LICENSE](LICENSE).
+Crest Take is unofficial and is not affiliated with X Corp. Respect creators' rights and platform terms. MIT license; see [LICENSE](LICENSE).

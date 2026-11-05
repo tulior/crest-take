@@ -1,18 +1,20 @@
 {
   "manifest_version": 3,
   "name": "Crest Take",
-  "version": "2.0.0",
-  "description": "Download the best progressive MP4 attached to an X post.",
+  "version": "3.0.0",
+  "description": "Download the best progressive MP4 from a video post on X.",
   "minimum_chrome_version": "120",
   "permissions": [
     "downloads",
     "storage"
   ],
   "host_permissions": [
-    "https://x.com/*"
+    "https://x.com/*",
+    "https://abs.twimg.com/*"
   ],
   "background": {
-    "service_worker": "service_worker.js"
+    "service_worker": "sw.js",
+    "type": "module"
   },
   "content_scripts": [
     {
@@ -20,7 +22,7 @@
         "https://x.com/*"
       ],
       "js": [
-        "core.js",
+        "shared.js",
         "content.js"
       ],
       "run_at": "document_idle"

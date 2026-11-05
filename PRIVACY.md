@@ -1,24 +1,25 @@
 # Privacy Policy — Crest Take
 
-**Updated:** 2026-11-05  
-**Applies to:** Crest Take, the Manifest V3 Chrome extension.
+**Updated: November 5, 2026.** This policy covers the Crest Take Chrome Manifest V3 extension.
 
-Crest Take adds a button to video posts on x.com. On activation it requests that post's metadata using the user's existing X session, chooses the highest-bitrate progressive MP4, and asks Chrome to download it. The extension has no developer-operated backend, account, advertising, tracking, or analytics.
+Crest Take saves a user-selected X post's highest-bitrate progressive MP4 through Chrome's own download manager. It has no developer-operated service, account, telemetry, advertising, analytics, or data sales.
 
-## Data used
+## Data processed
 
-- **Clicked post content:** post ID, author handle, and text, used to resolve the correct media and construct the filename.
-- **X authentication context:** the current `ct0` CSRF cookie, the user's existing session cookies (automatically sent to x.com), and the public application bearer read from X's own client bundles. These are used for requests to x.com only, and are **not persisted**.
-- **Minimal local download state:** a random request ID, Chrome's download ID, status/phase, timestamps, and a one-way SHA-256 fingerprint of the media URL. A limited number of short-lived orphaned download events may also be stored to recover event/callback ordering. These records are held in `chrome.storage.local` so an MV3 service worker can recover after suspension. They contain **no raw media URL, cookies, bearer tokens, filenames, post text, or browsing history**. The service worker attempts to restrict storage access to trusted extension contexts. Records are deleted on successful acknowledgement, and unacknowledged terminal records are pruned after 30 days; orphan records expire after 10 minutes.
+- The clicked post's identifier, author handle, and text are read from the visible X page. The identifier selects the post to resolve; the handle and text generate the download filename.
+- The user's existing X session is used for a request back to `x.com`. The current `ct0` CSRF cookie and the public app-level bearer extracted as text from X's client assets are used transiently. The extension does **not** persist cookies, app bearer, post text, filenames, or raw video URLs.
+- Minimal download recovery records are stored **locally** using `chrome.storage.local`. A request record includes a random request ID, state, owning tab/frame IDs, download ID, timestamps, and SHA-256 fingerprints of the URL and filename. A second key maps Chrome's download ID to the request ID. The records allow duplicate prevention, terminal-status reporting, and recovery when the service worker restarts or a Chrome download-start callback is lost.
 
-## External connections
+A terminal record and its reverse index are deleted when the content script acknowledges its terminal state. Unacknowledged terminal records are pruned after 30 days, and stale reverse entries are cleaned up during startup/periodic maintenance. Records are stored only in the browser's local extension storage, not synced to the developer. The service worker requests that storage access be restricted to trusted extension contexts.
 
-At activation time, the extension may read X's public JavaScript assets (for example from `abs.twimg.com`) as **text**, extracting the GraphQL operation ID and public app bearer; it does not execute external code. The post metadata request goes to `https://x.com/i/api/graphql/...` with the browser's existing X session. Chrome's download manager retrieves the chosen video media URL (typically `video.twimg.com`). No information is sent to the extension developer or third-party analytics services.
+## Network requests
 
-## User data and Limited Use
+On activation, the extension may fetch the public X web client's JavaScript bundles (including `abs.twimg.com`) **as text** to discover the current GraphQL operation and application token. Remote JavaScript is not executed. It makes the authenticated media metadata request to `x.com`; Chrome's download manager then fetches the selected MP4 from the media host (typically `video.twimg.com`). No user data is sent to the extension developer, analytics providers, or advertising partners.
 
-User data is used only to save a video selected by the user and to track whether that download completed. It is not sold, shared for advertising, used for profiling, or accessed by humans. The extension is intended to comply with the Chrome Web Store User Data Policy and Limited Use requirements; information received from Google APIs, if any, is subject to those requirements.
+## Limited Use and user rights
 
-The extension does not bypass access controls and cannot grant access to media the user is not already allowed to view. Users are responsible for respecting creators' rights and platform terms. Crest Take is not affiliated with X Corp.
+Collected/processed data is used solely to fulfil the user-requested download and verify its outcome, not for targeting, profiling, resale, or human review. Crest Take intends to comply with the Chrome Web Store User Data Policy and Limited Use requirements. The extension does not bypass login or access controls. Users must respect copyright and the terms of the platform they access.
 
-Questions: [mail@tulio.org](mailto:mail@tulio.org).
+Crest Take is not affiliated with X Corp.
+
+For questions, contact [mail@tulio.org](mailto:mail@tulio.org).
